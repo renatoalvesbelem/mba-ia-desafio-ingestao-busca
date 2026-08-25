@@ -1,3 +1,9 @@
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import PromptTemplate
+from langchain_core.runnables import RunnablePassthrough
+
+from providers import get_llm, get_vector_store
+
 PROMPT_TEMPLATE = """
 CONTEXTO:
 {contexto}
@@ -26,4 +32,25 @@ RESPONDA A "PERGUNTA DO USUÁRIO"
 """
 
 def search_prompt(question=None):
-    pass
+    try:
+        store = get_vector_store()
+        llm = get_llm()
+    except Exception as error:
+        print(f"Erro ao inicializar: {error}")
+        return None
+
+    def build_context(pergunta):
+        result = store.similarity_search_with_score(pergunta, k=10)
+        return "\n\n".join(doc.page_content.strip() for doc, _score in result)
+
+    prompt = PromptTemplate(
+        template=PROMPT_TEMPLATE,
+        input_variables=["contexto", "pergunta"],
+    )
+
+    return (
+        {"contexto": build_context, "pergunta": RunnablePassthrough()}
+        | prompt
+        | llm
+        | StrOutputParser()
+    )
